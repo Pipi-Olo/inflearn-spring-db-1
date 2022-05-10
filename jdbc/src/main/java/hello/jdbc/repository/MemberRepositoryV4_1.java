@@ -41,7 +41,6 @@ public class MemberRepositoryV4_1 implements MemberRepository {
 
             return member;
         } catch (SQLException e) {
-            log.error("db error", e);
             throw new MyDbException(e);
         } finally {
             close(con, pstmt, null);
@@ -71,7 +70,6 @@ public class MemberRepositoryV4_1 implements MemberRepository {
                 throw new NoSuchElementException("member not found memberId=" + memberId);
             }
         } catch (SQLException e) {
-            log.error("db error", e);
             throw new MyDbException(e);
         } finally {
             close(con, pstmt, rs);
@@ -94,7 +92,6 @@ public class MemberRepositoryV4_1 implements MemberRepository {
             int resultSize = pstmt.executeUpdate();
             log.info("resultSize={}", resultSize);
         } catch (SQLException e) {
-            log.error("db error", e);
             throw new MyDbException(e);
         } finally {
             close(con, pstmt, null);
@@ -115,7 +112,6 @@ public class MemberRepositoryV4_1 implements MemberRepository {
 
             pstmt.executeUpdate();
         } catch (SQLException e) {
-            log.error("db error", e);
             throw new MyDbException(e);
         } finally {
             close(con, pstmt, null);
