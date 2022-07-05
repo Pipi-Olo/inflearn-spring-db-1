@@ -504,4 +504,57 @@ public class MemberRepository implemetnes Repository {
   * 각 데이터베이스 `ErrorCode` 에 맞는 적절한 스프링 데이터 접근 예외로 변환해준다.
   * 특정 기술에 종속적이지 않게 되었다.
 
---- 
+---
+
+# 기타
+## 스프링 부트 자동 등록
+```java
+@Configuration
+public class AppConfig {
+
+    @Bean
+    public DataSource dataSource() {
+        return new DriverManagerDataSource(URL, USERNAME, PASSWORD);
+    }
+
+    @Bean
+    public PlatformTransactionManager transactionManager() {
+        return new DataSourceTransactionManager(datasource());
+    }
+}
+```
+
+* 기존에는 개발자가 직접 데이터 스소와 트랜잭션 매니저를 스프링 빈으로 등록했다.
+* 스프링 부트가 자동으로 데이터 소스와 트랜잭션 매니저를 등록한다.
+  * 개발자가 수동으로 등록하면, 스프링은 자동 등록하지 않는다.
+
+### 데이터 소스 자동 등록
+```java
+spring.datasource.url=jdbc:h2:tcp://localhost/~/test
+spring.datasource.username=hello
+spring.datasource.password=world
+```
+
+* 스프링 부트는 `application.properties` 속성을 통해 `DataSource` 를 자동으로 생성한다.
+  * `HikariDataSource` 구현체가 자동으로 등록된다.
+
+### 트랜잭션 매니저 자동 등록
+* 스프링 부트는 등록된 라이브러리를 바탕으로 `PlatformTransactionManager` 를 자동으로 등록하한다.
+  * JDBC → `DataSourceTransactionManager`
+  * JPA → `JpaTransactionManager`
+
+## 예외 포함과 스택 트레이스
+```java
+try {
+    runSQL();
+} catch (SQLException e) {
+    throw new RuntimeSQLException(e); // e → 기존 예외 포함
+}
+```
+
+* 기존 예외를 포함하지 않으면, `SQLException` 예외와 스택 트레이스를 확인할 수 없다.
+  * 변환한 `RuntimeSQLException` 부터 예외를 확인할 수 있다.
+  * 실제 데이터베이스에서 발생한 예외를 확인할 수 없는 심각한 문제가 생긴다.
+* 반드시 기존 예외를 포함해야 한다.
+
+---
