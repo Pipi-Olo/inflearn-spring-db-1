@@ -167,3 +167,177 @@ JDBC 의 등장으로 많은 것들이 편리해졌지만 각각의 데이터베
   * 트랜잭션을 사용하는 동안 같은 커넥션을 유지해야 한다.
 
 ---
+
+# 트랜잭션
+## 애플리케이션 로직
+![](https://velog.velcdn.com/images/pipiolo/post/f2d9939a-ad24-42df-8f87-d92b5a777742/image.png)
+
+* 프리젠테이션 게층 `@Controller`
+  * UI 관련 처리
+  * 웹 요청∙응답
+  * 기술 : 서블릿 등 HTTP 웹 기술, Spring MVC
+* 서비스 계층 `@Service`
+  * 비지니스 로직
+  * 기술 : 특정 기술에 의존하지 않는 순수 자바 코드
+* 데이터 접근 계층 `@Repository`
+  * 데이터베이스에 접근
+  * 기술 : JDBC, JPA, Redis
+
+## 서비스 계층은 순수해야한다.
+```java
+@Service
+public class Service {
+    private Repository repositry;
+    private DataSource dataSource;
+
+    public void save(Entity e) throws SQLException {
+        Connection con = dataSource.getConnection();
+        try {
+            con.setAutoCommit(false); // transaction start
+            repository.save(e, con);  // bizLogic
+            con.commit();             // commit
+        } catch (Exception e) {
+            com.rollback();           // rollback
+            throw new IllegalStateException(e);
+        } finally {
+            con.setAutoCommit(true);  // Connection Pool
+            con.close();
+        }
+    }
+}
+```
+
+* 해당 코드는 다음과 같은 문제점을 가지고 있다.
+* **서비스 계층은 순수해야 한다.**
+  * 특정 기술에 의존하지 않고, 순수 자바 코드로만 작성해야 한다.
+  * 프리젠테이션 계층은 UI와 관련된 기술들로부터 서비스 계층을 보호한다.
+  * 데이터 접근 계층은 데이터 접근 기술로부터 서비스 계층을 보호한다.
+    * `SQLException` JDBC 예외 같은 **특정 기술에 의존하고 있다.**
+* 트랜잭션 동기화 문제
+  * 트랜잭션은 서비스 계층에서 시작하는데, 데이터 베이스 접근은 리포지토리에서 이루어진다.
+  * **서비스 계층의 커넥션과 리포지토리의 커넥션을 동기화 시켜야 한다.**
+    * 파라미터로 커넥션을 넘겨주고 있다.
+* 트랜잭션 적용 반복 문제
+  * 트랜잭션을 적용할 때 마다 `try ~ catch ~ finally` 를 반복해야 한다.
+  * 핵심 비지니스 로직보다 다른 로직이 더 많다.
+    
+## 트랜잭션 매니저 (트랜잭션 추상화)
+![](https://velog.velcdn.com/images/pipiolo/post/61753f46-d2a5-4eec-b6d0-af0f98b020f8/image.png)
+
+* `PlatformTransactionManager` 트랜잭션 매니저를 통해 추상화했다.
+  * JDBC, JPA, Hibernate 등 다양한 트랜잭션 구현체를 갈아끼우면 된다.
+  * 기술 변경 시, 의존관계 주입만 바꾸면 된다.
+* 서비스 계층은 순수하다.
+  * 서비스 계층을 데이터 접근 기술로부터 보호할 수 있다.
+  * 추상화를 통해 서비스 계층은 JDBC, JPA 같은 특정 기술에 의존하지 않아도 된다.
+    * `SQLException` 에외 관련 기술 의존은 아직 해결하지 못 했다.
+
+
+## 트랜잭션 동기화 매니저
+![](https://velog.velcdn.com/images/pipiolo/post/b48ead89-c751-4591-bbca-a7b087fadcb1/image.png)
+
+* 트랜잭션을 유지하려면 같은 커넥션을 유지(`동기화`) 해야 한다.
+* 트랜잭션 동기화 매니저를 통해 같은 커넥션을 유지할 수 있다.
+  * 내부에서 쓰레드 로컬(`ThreadLocal`)을 통해 커넥션을 동기화한다.
+    * 멀티 쓰레드 환경에서 안전하게 동작한다.
+  * 커넥션을 파라미터로 전달하지 않아도 된다.
+* 트랜잭션은 다음과 같이 동작한다.
+  1. 서비스 계층에서 트랜잭션을 시작한다. 
+  2. 트랜잭션 매니저는 데이터 소스를 사용해서 커넥션 풀을 통해 커넥션을 얻는다.
+  3. 커넥션을 수동 커밋 모브도 변경해서 트랜잭션 동기화 매니저에 보관한다.
+  4. 트랜잭션 동기화 매니저는 쓰레드 로컬에 커넥션을 보관한다.
+  5. **리포지토리는 트랜잭션 동기화 매니저을 통해 커넥션을 얻는다.**
+  6. 이를 통해 **같은 커넥션, 같은 트랜잭션을 유지**한다.
+  7. 서비스 계층에서 트랜잭션을 종료한다.
+  8. 트랜잭션 매니저는 트랜잭션 동기화 매니저 쓰레드 로컬에 보관된 커넥션을 가지고 온다.
+  9. 획득한 커넥션을 통해 데이터베이스에 커밋하거나 롤백한다.
+  10. 전체 리소스를 정리한다.
+      * 트랜잭션 동기화 매니저의 쓰레드 로컬을 정리한다.
+      * 자동 커밋 모드로 되돌린다. 커넥션 풀을 고려해야 한다.
+      * 커넥션을 커넥션 풀에 반환한다.
+
+## 트랜잭션 템플릿
+```java
+@Service
+public class Service {
+	
+    private final TransactionTemplate txTemplate;
+    
+    public void service(String fromId, String toId, Integer money) {
+    	txTemplate.executeWithoutResult((status) -> {
+			try {
+				bizLogic(fromId, toId, money);
+    		} catch (SQLException e) {
+         		throw new IllegalStateException(e);
+    		}
+		});
+    }
+} 
+
+
+
+```
+
+* `TransactionTemplate` 을 통해 트랜잭션 시작, 커밋, 롤백 하는 코드를 제거했다.
+  * 비지니스 로직 결과에 따라 자동으로 커밋 혹은 롤백한다.
+* `try ~ catch` 는 `SQLException` 체크 예외를 해결하기 위함이다.
+  * 트래잭션 추상화로도 해결하지 못 한 특정 기술에 의존하는 문제이다.
+
+## 한계
+* 트랜잭션 추상화, 동기화, 템플릿을 통해 많은 문제들을 해결했다.
+* 하지만, 서비스 계층에 비지니스 로직뿐만 아니라 트랜잭션 기술 로직이 함께 포함되어 있다.
+  * 비지니스 로직은 핵심기능 이고, 트랜잭션 로직은 부가기능이다.
+  * 두 관심사가 한 곳에 있으면, 유지보수하기 어렵다.
+* 서비스 계층은 핵심 비지니스 로직만 있어야 한다.
+
+## 트랜잭션 AOP
+```java
+public class TransactionProxy {
+	
+    private final Service target;
+    private fianl TransactionManager transactionManager;
+    
+    public void logic() {
+    	TransactionStatus status = transactionManager.getTransaction(..);
+        try {
+        	target.logic();
+            transactionManager.commit(status);
+        } catch (Exception e) {
+        	transactionManager.rollback(status);
+            throw new IllegalStateExcepeion(e);
+        }
+    }
+}
+```
+```java
+@Service
+public class Service {
+
+	public void logic() {
+    	bizLogic();
+    }
+}
+```
+![](https://velog.velcdn.com/images/pipiolo/post/d0d0ec8d-ddfd-45b1-8ecc-a1c01d17e5a6/image.png)
+
+* 기존에는 서비스 계층에 트랜잭션과 비지니스 로직이 섞여 있었다.
+* 트랜잭션 프록시가 트랜잭션 로직을 담당하고 서비스 계층은 비지니스 로직만 책임진다.
+  * 프록시를 통해 서비스 계층은 이제 순수하다.
+  
+### 스프링 트랜잭션 AOP
+```java
+@Service
+public class Service {
+	
+    @Transactional
+	public void logic() {
+    	bizLogic();
+    }
+}
+```
+* `@Transactional` 애노테이션을 통해 프록시를 매우 편리하게 적용할 수 있다.
+* 트랜잭션 프록시 클래스가 자동으로 생성된다.
+
+![](https://velog.velcdn.com/images/pipiolo/post/9bf5f90b-101a-4a9f-89b4-6bfeef052298/image.jpeg)
+
+---
