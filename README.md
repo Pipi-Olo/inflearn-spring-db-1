@@ -46,3 +46,34 @@ JDBC 의 등장으로 많은 것들이 편리해졌지만 각각의 데이터베
   * 내부에는 모두 JDBC 를 사용한다.
 
 ---
+
+# 커넷션 풀과 데이터 소스
+## 커넥션 풀 이해
+### 데이터베이스 커넥션 획득
+![](https://velog.velcdn.com/images/pipiolo/post/cfb173ab-7b9d-46c4-a9fa-1e0a79f12cce/image.png)
+
+* 데이터베이스에 연결할 때마다 커넥션을 새로 생성하는 것은 과정도 복잡하고 시간이 많이 소모된다.
+
+### 커넥션 풀
+![](https://velog.velcdn.com/images/pipiolo/post/8cd99f63-6c51-40df-90c2-cca6b418d790/image.png)
+
+* 커넥션을 미리 생성해두고 사용하는 **커넥션 풀**을 통해 해결할 수 있다.
+  * 애플리케이션이 시작하는 시점에 필요한 만큼 미리 커넥션을 생성해서 풀에 보관한다. 
+  * 기본 값은 10개이다.
+* 커넥션은 `TCP / IP` 로 DB 와 연결되어 있기 때문에 즉시 SQL 을 DB 에 전달할 수 있다.
+* 애플리케이션은 커넥션 풀을 통해 이미 생성된 커넥션을 객체 참조로 가져다 쓴다. 
+  * 커넥션을 모두 사용하고 나면, 커넥션을 종료하는 것이 아니라 커넥션을 그대로 풀에 반환한다.
+* 최대 커넥션 수가 제한되어 있어, DB 연결이 무한정 늘어나는 것을 막아주는 DB 보호 기능 효과도 있다.
+* 스프링 부트 2.0 부터는 `HikariCP` 가 기본 커넥션 풀로 작동한다.
+
+## 데이터 소스
+![](https://velog.velcdn.com/images/pipiolo/post/f4f1256a-a68d-4665-a107-6a289c6aa29f/image.png)
+
+* 커넥션 획득 방법을 추상화한 인터페이스를 **`DataSource`** 라 한다.
+  * `DataSource` 의 핵심 기능은 커넥션 조회이다.
+* 커넥션 획득은 `DataSource` 인터페이스에 의존하면 된다.
+
+> **참고**
+> `DriverManager` 는 `DataSource` 인터페이스를 사용하지 않는다. 스프링은 `DriverManagerDataSource` 라는 `DataSource` 인터페이스를 구현한 클래스를 제공한다.
+
+---
