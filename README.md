@@ -424,3 +424,84 @@ void method() throws Exception {..}
 * 서비스 계층에서 불필요한 의존관계가 발생하지 않는다. → 특정 리포지토리 기술에 의존하지 않는다.
 
 ---
+
+# 스프링 예외
+## 체크 예외와 인터페이스
+```java
+public interface MemberRepository {
+	Member Save(Member member) throws SQLException;
+    
+    Member FindByUId(Long memberId) throws SQLException;
+    
+    void delete(Long memberId) throws SQLException;
+    
+    ...
+}
+```
+![](https://velog.velcdn.com/images/pipiolo/post/8c1affcc-51e2-44af-9313-29fd3ca5ab91/image.png)
+
+* 리포지토리 인터페이스를 통해 서비스 계층이 특정 기술에 의존하는 문제를 해결한 것처럼 보인다.
+* 하지만, `SQLException` 은 체크 예외이기 때문에 인터페이스에도 체크 예외가 선언되어야 한다.
+  * 인터페이스 자체가 특정 기술에 종속적이다.
+* 구현체를 쉽게 변경하기 위해서 인터페이스를 도입했는데, 구현체를 변경하면 인터페이스도 변경해야 한다.
+
+## 언체크 예외와 인터페이스
+```java
+public class MemberRepository implemetnes Repository {
+
+	private final DataSource dataSource;
+    
+    public Member save(Member member) {
+    	Connection con = null;
+        PreparedStatement pstmt = null;
+        
+        try {
+        	con = dataSource.getConnection();
+            pstmt = con.preparedStatement(sql);
+            
+            pstmt.executeUpdate();
+            return member;
+        } catch (SQLException e) {
+        	if (e.getErrorCode == 23505) { //  H2 키 중복 오류 코드
+            	throw new MyDuplicateKeyException(e);
+            }
+            
+            throw new MyDbException(e);
+        } finally {
+        	closeStatement(pstmt);
+            closeConnection(con);
+        }
+    }
+}
+```
+
+* 특정 데이터베이스에서 올라오는 체크 예외를 런타임 예외로 변환시켜서 서비스 계층에 넘긴다.
+  * 키 중복 오류는 `MyDuplicateKeyException` 런타임 예외로 변환한다.
+  * 나머지 오류는 `MyDbException` 런타임 예외로 변환한다.
+* 더이상 서비스 계층은 체크 예외에 신경쓸 필요 없다.
+* **하지만, `SQL ErrorCode` 는 각 데이터베이스 마다 다르다.**
+  * 데이터베이스가 변경되면, `ErrorCode` 를 모두 변경해야 한다.
+  * 키 중복 오류 코드
+    * H2 → 23505
+    * MySQL → 1062
+    
+## 스프링 예외 추상화
+![](https://velog.velcdn.com/images/pipiolo/post/33153d3f-81d6-4157-9102-8f1cfa3dcce2/image.png)
+
+* JDBC, JPA 등 특정 기술에서 발생하는 예외를 스프링이 제공하는 예외로 변환해준다.
+* `DataAccessException`
+  * 데이터 접근 예외의 최고 상위이다.
+  * 런타임 예외를 상속했기 때문에 스프링이 제공하는 데이터 접근 계층의 모든 예외는 런타임 예외이다.
+* `Transient`
+  * 일시적이라는 뜻으로 동일한 SQL 을 다시 시도했을 때, 성공항 가능성이 있다.
+  * 쿼리 타임아웃, 데이터베이스 락과 관련된 오류이다.
+* `NonTransient`
+  * 일시적이지 않다라는 뜻으로 같은 SQL 을 반복해서 실행하면 실패한다.
+  * SQL 문법 오류, 데이터베이스 제약조건 위배 등이 있다.
+* `org.springframework.jdbc.support.sql-error-codes.xml`
+  * 해당 파일에 각 데이터베이스 `ErrorCode` 에 대응하는 스프링 데이터 접근 예외가 선언되어 있다.
+* 데이터 접근 계층에 대한 일관된 예외 추상화를 제공한다.
+  * 각 데이터베이스 `ErrorCode` 에 맞는 적절한 스프링 데이터 접근 예외로 변환해준다.
+  * 특정 기술에 종속적이지 않게 되었다.
+
+--- 
