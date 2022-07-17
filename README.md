@@ -1,3 +1,6 @@
+> 이 글은 김영한 님의 **'스프링 완전 정복 로드맵'** 강의를 듣고 정리한 내용입니다.
+> 강의 : [스프링 DB 1편 - 데이터 접근 핵심 원리](https://www.inflearn.com/course/%EC%8A%A4%ED%94%84%EB%A7%81-db-1/)
+
 # JDBC
 ## 데이터베이스 연결
 ![](https://velog.velcdn.com/images/pipiolo/post/0baa42f9-d6fe-40c8-8b0d-aa363448d6f6/image.png)
@@ -48,6 +51,7 @@ JDBC 의 등장으로 많은 것들이 편리해졌지만 각각의 데이터베
 ---
 
 # 커넷션 풀과 데이터 소스
+
 ## 커넥션 풀 이해
 ### 데이터베이스 커넥션 획득
 ![](https://velog.velcdn.com/images/pipiolo/post/cfb173ab-7b9d-46c4-a9fa-1e0a79f12cce/image.png)
@@ -504,7 +508,7 @@ public class MemberRepository implemetnes Repository {
   * 각 데이터베이스 `ErrorCode` 에 맞는 적절한 스프링 데이터 접근 예외로 변환해준다.
   * 특정 기술에 종속적이지 않게 되었다.
 
----
+--- 
 
 # 기타
 ## 스프링 부트 자동 등록
